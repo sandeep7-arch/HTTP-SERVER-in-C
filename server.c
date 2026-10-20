@@ -1,6 +1,5 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <stdio.h>
 #include <unistd.h>
 #include <netinet/in.h>
 #include <string.h>
@@ -8,6 +7,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netdb.h>
+#include <arpa/inet.h>
 #define PORT "8080" //port to which the users will connect to
 #define BACKLOGS 5
 
@@ -36,7 +36,7 @@ int main() {
     }
     
     for(auto p = res ; p!=NULL ; p = p->ai_next ) {
-        struct sockaddr_in address;
+        
         if((socket_fd = socket(p->ai_family , p->ai_socktype , p->ai_protocol))==-1) {
             perror("server : socket");
             continue;
