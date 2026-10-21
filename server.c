@@ -6,47 +6,55 @@
 #include <errno.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <signal.h>
 #define PORT "8080" //port to which the users will connect to
 #define BACKLOGS 5
 
-void* sigchldhandler(int s) {
-    (void*)s;
+void sigchldhandler(int s) {
+    (void)s;
     int saved_errno = errno;
     while(waitpid(-1 , NULL , WNOHANG) > 0);
     errno = saved_errno;
 }
 
+void* get_in_addr(struct sockaddr* addr) {
+    if(addr->sa_family==AF_INET) {
+        return &(((struct sockaddr_in*)addr)->sin_addr);
+    }
+    else return &(((struct sockaddr_in6*)addr)->sin6_addr);
+}
 
 int main() {
     int socket_fd , new_fd;
-    struct addrinfo hints , *res;
-    struct sockaddr_in their_addr; // this server stricly tuns for Ipv4 addresses so I am using ipv4 everywhere
-    char s[INET_ADDRSTRLEN] // size of a ipv4 address
+    struct addrinfo hints , *res , *p;
+    struct sockaddr_storage their_addr; 
+    char ip[INET6_ADDRSTRLEN]; 
     int status;
     memset(&hints , 0 , sizeof(hints));
-    hints.ai_family = AF_INET;
+    hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
-    int yes;
+    int yes = 1;
     if((status = getaddrinfo(NULL , PORT , &hints , &res))!=0) {
         fprintf(stderr , "gai err : %s\n" , gai_strerror(status));
         exit(1);
     }
     
-    for(auto p = res ; p!=NULL ; p = p->ai_next ) {
+    for(p = res ; p!=NULL ; p = p->ai_next ) {
         
         if((socket_fd = socket(p->ai_family , p->ai_socktype , p->ai_protocol))==-1) {
             perror("server : socket");
             continue;
         }
-        if(setsocketopt(socket_fd , SOL_SOCKET , SO_REUSEADDR , &yes , sizeof(int))==-1) {
+        if(setsockopt(socket_fd , SOL_SOCKET , SO_REUSEADDR , &yes , sizeof(int))==-1) {
             perror("setsocketopt");
            // close(socket_fd); this is handled automatically by exit(1)
             exit(1);
         }
-        if(bind(socket_fd , p->ai_addr ,, p->ai_addrlen)<0){
+        if(bind(socket_fd , p->ai_addr , p->ai_addrlen)<0){
             close(socket_fd);
             continue;
         }
@@ -59,7 +67,7 @@ int main() {
         exit(1);
     }
     if(listen(socket_fd , BACKLOGS)==-1) {
-        fprintf(stderr , "listen");
+        fprintf(stderr , "listen\n");
         exit(1);
     }
 
@@ -67,34 +75,37 @@ int main() {
     sa.sa_handler = sigchldhandler;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
-    if(sigaction(SIG_CHLD , &sa , NULL)==-1) {
+    if(sigaction(SIGCHLD , &sa , NULL)==-1) {
         perror("sigaction");
         exit(1);
     }
 
-    printf("server waiting for connections");
+    printf("server waiting for connections\n");
     
     while(1) {
     socklen_t sin_len = sizeof(their_addr);
-    if((new_fd = accept(socket_fd , (struct sockaddr*)their_addr , &sin_len))==-1) {
+    if((new_fd = accept(socket_fd , (struct sockaddr*)&their_addr , &sin_len))==-1) {
             perror("accept of connection failed");
             continue;
         }
-    inet_ntop(their_addr->sin_family , their_addr->sin_addr , s , sizeof s);
-    printf("server connected to %s\n" , s);
+    inet_ntop(their_addr.ss_family , get_in_addr((struct sockaddr*)&their_addr) , ip , sizeof ip);
+    printf("server connected to %s\n" , ip);
 
         if(!fork()) {
             close(socket_fd);
             char buff[512];
-            snprintf(buff , sizeof(buff) , "HELLO NETWORKING WORLD!!");
+            snprintf(buff , sizeof(buff) , "HELLO NETWORKING WORLD!!\n");
 
             if(send(new_fd , buff , sizeof(buff) , 0)==-1) {
                 perror("server : send");
                 close(new_fd);
                 exit(0); 
         }
+        
         close(new_fd);
+        exit(0);
     }
 
-        return 0;
+}
+    return 0;
 }

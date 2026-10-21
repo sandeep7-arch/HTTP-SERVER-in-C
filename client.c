@@ -1,22 +1,32 @@
-//client is strictly Ipv4 so there is no fn to also connect with Ipv6 addresses
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <netdb.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#define PORT "8080";
-#define MAX_BYTES 100;
+#define PORT "8080"
+#define MAX_BYTES 100
+
+void* get_in_addr(struct sockaddr* addr) {
+    if(addr->sa_family==AF_INET) {
+        return &(((struct sockaddr_in*)addr)->sin_addr);
+    }
+    else return &(((struct sockaddr_in6*)addr)->sin6_addr);
+}
+
 int main(int argc , char* argv[]) {
     if(argc != 2) {
         perror("USAGE : ./client client_hostname");
         exit(1);
     }
-    int sock_fd;
+    int sock_fd , num_bytes;
     char buf[MAX_BYTES];
     struct addrinfo hints , *res , *p;
     memset(&hints , 0 , sizeof(hints));
-    hints.ai_family = AF_INET;
+    hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     int rv;
     char s[INET_ADDRSTRLEN];
@@ -30,12 +40,12 @@ int main(int argc , char* argv[]) {
 
             continue;
         } 
-        inet_ntop(p->ai_family , (struct sockaddr_in *)p->sin_addr , s , sizeof s);
+        inet_ntop(p->ai_family , get_in_addr((struct sockaddr *)&p) , s , sizeof s);
         printf("client trying to connect to %s\n" , s);
 
-        if(connect(sock_fd , p->ai_addr , p->addrlen)==-1) {
+        if(connect(sock_fd , p->ai_addr , p->ai_addrlen)==-1) {
             perror("Connection failed");
-            close(fd);
+            close(sock_fd);
             continue;
         }
         break;
@@ -46,13 +56,13 @@ int main(int argc , char* argv[]) {
         perror("CLIENT : NO CONNECTION");
         exit(1);
     }
-        inet_ntop(p->ai_family , (struct sockaddr_in *)p->sin_addr , s , sizeof s);
+        inet_ntop(p->ai_family , get_in_addr((struct sockaddr *)&p) , s , sizeof s);
         printf("client connected to %s\n" , s);
-    if((numbytes = recv(sock_fd , buf , MAX_SIZE-1 , 0))==-1) {
+    if((num_bytes = recv(sock_fd , buf , MAX_BYTES-1 , 0))==-1) {
         perror("recv");
         exit(1);
     }
-    buf[num_bytes] = '\0'
+    buf[num_bytes] = '\0';
 
     printf("client recieved : %s\n" , buf);
     close(sock_fd);
