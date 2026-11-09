@@ -155,6 +155,10 @@ int main() {
                 exit(1);
         }
             }
+        else if(strncmp(recieved_text , "POST" , 4)==0) {
+        //NOTE: this is where we recieve data 
+        
+      }
             close(new_fd);
             exit(0);
         }
